@@ -1,0 +1,21 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.0-alpha3"}
+        io.github.phronmophobic/clong {;; :git/sha "945d9a71c6436938b3bdf11de2e7bf1f1c4c978c"
+                                       ;;:local/root "../clong"
+                                       :mvn/version "1.4"}
+        org.bytedeco/libffi-platform {:mvn/version "3.4.4-1.5.10"}
+        org.bytedeco/llvm-platform {:mvn/version "17.0.6-1.5.10"}
+        ;;org.bytedeco/llvm-platform {:mvn/version "16.0.4-1.5.9"}
+        }
+ :aliases
+ {:project
+  {
+   :jvm-opts [;; "-Djava.library.path=/opt/local/lib"
+              ;; "-Djna.library.path=../llvm-project/build/out/lib:/opt/local/lib"
+              ]
+
+   :extra-deps {
+                }
+
+
+   }}}
