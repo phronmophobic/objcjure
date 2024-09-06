@@ -54,7 +54,43 @@
               (fn [fns]
                 (filter keep-function? fns)))))
 
-(def full-api (clong/easy-api "headers/objc.h"))
+(defn ^:private write-edn [w obj]
+  (binding [*print-length* nil
+            *print-level* nil
+            *print-dup* false
+            *print-meta* false
+            *print-readably* true
+
+            ;; namespaced maps not part of edn spec
+            *print-namespace-maps* false
+
+            *out* w]
+    (pr obj)))
+
+(defn dump-api []
+  (let [outf (io/file
+              "resources"
+              "com"
+              "phronemophobic"
+              "objcjure"
+              "api.edn")]
+    (.mkdirs (.getParentFile outf))
+    (with-open [w (io/writer outf)]
+      (write-edn w
+                 ((requiring-resolve 'com.phronemophobic.clong.clang/easy-api)
+                  (.getCanonicalPath (io/file "headers"
+                                              "objc.h")))))))
+
+(defn load-api []
+  (with-open [rdr (io/reader
+                   (io/resource
+                    "com/phronemophobic/objcjure/api.edn"))
+              rdr (java.io.PushbackReader. rdr)]
+    (edn/read rdr)))
+
+(def full-api
+  (load-api)
+  #_(clong/easy-api "/Users/adrian/workspace/objcjure/headers/objc.h"))
 (def api (tweak-api full-api))
 
 
@@ -63,7 +99,7 @@
 (def process-lib
   (com.sun.jna.NativeLibrary/getProcess))
 
-(gen/def-api process-lib api)
+(gen/def-api-lazy process-lib api)
 (gen/import-structs! api)
 
 
@@ -382,28 +418,28 @@
 
 
 
-;;
-(gen/def-struct
-  "com.phronemophobic.objcjure.structs"
-  {:kind "CXCursor_StructDecl",
-   :spelling "struct CGSize",
-   :type "CXType_Record",
-   :id :clong/CGSize,
-   :size-in-bytes 16,
-   :fields
-   [{:type "double",
-     :datatype :coffi.mem/double,
-     :name "width",
-     :bitfield? false,
-     :calculated-offset 0}
-    {:type "double",
-     :datatype :coffi.mem/double,
-     :name "height",
-     :bitfield? false,
-     :calculated-offset 64}]})
-(import 'com.phronemophobic.objcjure.structs.CGSize)
+;; ;;
+;; (gen/def-struct
+;;   "com.phronemophobic.objcjure.structs"
+;;   {:kind "CXCursor_StructDecl",
+;;    :spelling "struct CGSize",
+;;    :type "CXType_Record",
+;;    :id :clong/CGSize,
+;;    :size-in-bytes 16,
+;;    :fields
+;;    [{:type "double",
+;;      :datatype :coffi.mem/double,
+;;      :name "width",
+;;      :bitfield? false,
+;;      :calculated-offset 0}
+;;     {:type "double",
+;;      :datatype :coffi.mem/double,
+;;      :name "height",
+;;      :bitfield? false,
+;;      :calculated-offset 64}]})
+;; (import 'com.phronemophobic.objcjure.structs.CGSize)
 
-(defn -main []
+#_(defn -main []
   ;; NSImage *image = [NSImage imageNamed:@"example.png"];
   ;;  CIImage *ciImage = [[CIImage alloc] initWithData:image.TIFFRepresentation];
   (def nsimage (objc
