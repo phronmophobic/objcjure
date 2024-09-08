@@ -1,21 +1,16 @@
 (ns com.phronemophobic.objcjure
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.pprint :refer [pprint]]
             [clojure.edn :as edn]
             [clojure.walk :as walk]
-            [com.phronemophobic.clong.clang :as clong]
-            [com.phronemophobic.clong.gen.jna :as gen])
+            [com.phronemophobic.clj-libffi :as ffi]
+            [com.phronemophobic.clong.gen.dtype-next :as gen]
+            [tech.v3.datatype.ffi :as dt-ffi])
   (:import
-   java.io.PushbackReader
-   com.sun.jna.Memory
-   com.sun.jna.Pointer
-   com.sun.jna.Function
-   com.sun.jna.CallbackReference
-   com.sun.jna.ptr.PointerByReference
-   com.sun.jna.ptr.LongByReference
-   com.sun.jna.Structure)
+   java.io.PushbackReader)
   (:gen-class))
+
+(set! *warn-on-reflection* true)
 
 (defonce not-garbage (atom #{}))
 (defn ref! [o]
@@ -28,10 +23,16 @@
   #{:clong/__darwin_arm_neon_state64
     :clong/__darwin_arm_neon_state})
 
+(def ignored-fns
+  #{"protocol_getMethodDescription"
+    "class_createInstanceFromZone"
+    "object_copyFromZone"
+    "objc_msgSend" })
+
 (defn keep-function? [f]
   (let [nm (:symbol f)]
     (and (not (str/ends-with? nm "_stret"))
-         (not (#{"objc_msgSend"} nm))
+         (not (ignored-fns nm))
          (or (str/starts-with? nm "class_")
              (str/starts-with? nm "objc_")
              (str/starts-with? nm "protocol_")
@@ -93,34 +94,59 @@
   #_(clong/easy-api "/Users/adrian/workspace/objcjure/headers/objc.h"))
 (def api (tweak-api full-api))
 
+(def dtype-api (gen/api->library-interface api))
 
-;; (com.sun.jna.NativeLibrary/getInstance "c")
-;; (com.sun.jna.NativeLibrary/getInstance "objc")
-(def process-lib
-  (com.sun.jna.NativeLibrary/getProcess))
+(dt-ffi/define-library-interface dtype-api)
 
-(gen/def-api-lazy process-lib api)
-(gen/import-structs! api)
+(defn arg->dtype [arg]
+  (cond
+    (nil? arg) :pointer?
+    (instance? Long arg) :int64
+    (instance? Integer arg) :int32
+    (instance? Short arg) :int16
+    (instance? Byte arg) :int8
+    (instance? Double arg) :float64
+    (instance? Float arg) :float32
+    (char? arg) :int8
+    (dt-ffi/convertible-to-pointer? arg) :pointer
 
+    :else (throw (ex-info "Unsupported arg dtype"
+                          {:arg arg}))))
+
+
+(defn -call-args [id ret & args]
+  (let [call-args (into [:pointer id]
+                        (mapcat (fn [arg]
+                                  [(arg->dtype arg)
+                                   arg]))
+                        args)]
+    call-args))
 
 (defn objc-msgSend [id ret & args]
-  (let [f (.getFunction process-lib "objc_msgSend")]
-    (.invoke f ret (to-array (into [id] args)))))
+  (let [call-args (into [:pointer id]
+                        (mapcat (fn [arg]
+                                  [(arg->dtype arg)
+                                   arg]))
+                        args)]
+    (apply
+     ffi/call "objc_msgSend"
+     ret
+     call-args)))
 
 
 (def USE_VARARGS_SHIFT 7)
 ;; doesn't work
-(defn objc-msgSend-varargs [id num-args ret & args]
+#_(defn objc-msgSend-varargs [id num-args ret & args]
   ;; int callFlags = this.callFlags | ((fixedArgs & USE_VARARGS) << USE_VARARGS_SHIFT);
   (let [call-flags (bit-shift-left
                     (bit-and Function/USE_VARARGS
                              num-args)
                     USE_VARARGS_SHIFT)
-        f (.getFunction process-lib "objc_msgSend" call-flags)]
+        f (.getFunction ^NativeLibrary @process-lib "objc_msgSend" call-flags)]
     (.invoke f ret (to-array (into [id] args)))))
 
-(def ^:private main-class-loader @clojure.lang.Compiler/LOADER)
-(deftype GenericCallback [return-type parameter-types callback]
+#_(def ^:private main-class-loader @clojure.lang.Compiler/LOADER)
+#_(deftype GenericCallback [return-type parameter-types callback]
   com.sun.jna.CallbackProxy
   (getParameterTypes [_]
     (into-array Class parameter-types))
@@ -151,14 +177,14 @@
 ;; ;; - block support
 ;; ;;    - https://clang.llvm.org/docs/Block-ABI-Apple.html
 ;; ;;    - https://www.galloway.me.uk/2012/10/a-look-inside-blocks-episode-1/
-(defn make-block [return-type parameter-types callback]
+#_(defn make-block [return-type parameter-types callback]
   (let [jna-callback (ref! (->GenericCallback return-type parameter-types callback)) 
 
         block-descriptor (Block_descriptor_1ByReference.)
         block-descriptor (.writeField block-descriptor "size" (long (.size block-descriptor)))
 
         block (doto (Block_literal_1ByReference.)
-                (.writeField "isa" (.getGlobalVariableAddress process-lib "_NSConcreteGlobalBlock"))
+                (.writeField "isa" (.getGlobalVariableAddress ^NativeLibrary @process-lib "_NSConcreteGlobalBlock"))
                 (.writeField "flags" (int (bit-or
                                            BLOCK_IS_GLOBAL
                                            BLOCK_HAS_STRET)))
@@ -188,17 +214,16 @@
 
   ,)
 
-
-(def ^{:private true} prim->class
-  {'int `Integer/TYPE
-   'long `Long/TYPE
-   'float `Float/TYPE
-   'double `Double/TYPE
-   'void `Void/TYPE
-   'short `Short/TYPE
-   'boolean `Boolean/TYPE
-   'byte `Byte/TYPE
-   'char `Character/TYPE})
+(def ^{:private true} prim->dtype
+  {'int :int32
+   'long :int64
+   'float :float32
+   'double :float64
+   'void :void
+   'short :int16
+   'boolean :int8
+   'byte :int8
+   'char :int8})
 
 (declare objc-syntax)
 
@@ -210,38 +235,40 @@
            2)
     (throw (ex-info "Vectors must have at least two elements."
                     {:form form})))
-  (let [tag (or (-> form meta :tag)
-                `Pointer)]
+  (let [tag (or (prim->dtype (-> form meta :tag))
+                :pointer)]
     `(objc-msgSend
       ~(objc-syntax env (first form))
-      ~(or (prim->class tag)
-           tag)
+      ~tag
       ~@(if (= 2 (count form))
-          [`(sel_registerName ~(str (name (second form))))]
+          [`(sel_registerName (dt-ffi/string->c ~(str (name (second form)))))]
           (eduction
            (map (fn [form]
                   (if (keyword? form)
-                    `(sel_registerName ~(str (name form) ":"))
+                    `(sel_registerName (dt-ffi/string->c ~(str (name form) ":")))
                     (objc-syntax env form)))
                 (rest form)))))))
 
+(def ^:dynamic *sci-ctx* nil)
+(def sci-resolve (try
+                   @(requiring-resolve 'sci.core/resolve)
+                   (catch Exception e
+                     nil)))
 (defn objc-syntax-symbol [env form]
-  (cond
+  (let [resolved (delay
+                   (if *sci-ctx*
+                     (sci-resolve *sci-ctx* form)
+                     (resolve env form)))]
+    (cond
 
-    (contains? env form) form
-    (resolve env form) form
-    :else
-    (if-let [cls (objc_getClass (name form))]
-      `(objc_getClass ~(name form))
-      (throw (ex-info "Unable to resolve symbol"
-                      {:form form
-                       :env env})))
-    #_(try
-        (let [address (.getGlobalVariableAddress process-lib (name sym))])
-        (catch UnsatisfiedLinkError e
-          ))))
-
-;; (.getGlobalVariableAddress process-lib "NSUserNotificationDefaultSoundName")
+      (contains? env form) form
+      
+      @resolved form
+      :else
+      `(if-let [cls# (objc_getClass (dt-ffi/string->c ~(name form)))]
+         cls#
+         (throw (ex-info "Unable to resolve symbol"
+                         {:sym (quote ~form)}))))))
 
 (defn objc-syntax-seq [env form]
   (if-let [verb (first form)]
@@ -262,10 +289,10 @@
                                   [NSArray :arrayWithObjects:count mem# len#]))
                               `(objc [NSArray array]))
           (string? subject) `(objc-msgSend 
-                              (objc_getClass "NSString")
-                              Pointer
-                              (sel_registerName "stringWithUTF8String:")
-                              (.getBytes ~subject "utf-8"))
+                              (objc_getClass (dt-ffi/string->c "NSString"))
+                              :pointer
+                              (sel_registerName (dt-ffi/string->c "stringWithUTF8String:"))
+                              (dt-ffi/string->c ~subject))
           (set? subject) (if (seq subject)
                            `(let [v# ~(into []
                                             (map #(objc-syntax env %))
@@ -295,13 +322,13 @@
                            `(objc [NSDictionary dictionary]))
           (number? subject)
           (let [sel (cond
-                      (instance? Long subject) `(sel_registerName "numberWithLong:")
-                      (double? subject) `(sel_registerName "numberWithDouble:")
+                      (instance? Long subject) `(sel_registerName (dt-ffi/string->c "numberWithLong:"))
+                      (double? subject) `(sel_registerName (dt-ffi/string->c "numberWithDouble:"))
                       :else (throw (ex-info "Unsupported number literal"
                                             {:form form})))]
             `(objc-msgSend
-              (objc_getClass "NSNumber")
-              Pointer
+              (objc_getClass (dt-ffi/string->c "NSNumber"))
+              :pointer
               ~sel
               ~subject))
           
@@ -329,7 +356,7 @@
   ([env form]
    (cond
 
-     (nil? form) nil
+     (nil? form) (ffi/long->pointer 0)
 
      (seq? form)
      (objc-syntax-seq env form)
@@ -352,7 +379,7 @@
 
 (defn nsstring->str [nsstring]
   (let [p (objc [nsstring UTF8String])]
-    (.getString p 0 "utf-8")))
+    (dt-ffi/c->string p)))
 
 (defn oprn [os]
   (prn (nsstring->str os)))

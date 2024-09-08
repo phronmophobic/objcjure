@@ -1,11 +1,12 @@
 {:paths ["src" "resources"]
  :deps {org.clojure/clojure {:mvn/version "1.12.0-alpha3"}
         com.phronemophobic/clong {;; :git/sha "945d9a71c6436938b3bdf11de2e7bf1f1c4c978c"
-                                       ;;:local/root "../clong"
-                                  :mvn/version "1.4.1"}
-        ;; org.bytedeco/libffi-platform {:mvn/version "3.4.4-1.5.10"}
-        org.bytedeco/llvm-platform {:mvn/version "17.0.6-1.5.10"}
-        ;;org.bytedeco/llvm-platform {:mvn/version "16.0.4-1.5.9"}
+                                  :local/root "../clong"
+                                  ;; :mvn/version "1.4.1"
+                                  }
+        cnuernber/dtype-next {:mvn/version "10.113"}
+        com.phronemophobic/clj-libffi {;;:mvn/version "1.4"
+                                       :local/root "../clj-libffi"}
         }
  :aliases
  {:project
@@ -14,8 +15,8 @@
               ;; "-Djna.library.path=../llvm-project/build/out/lib:/opt/local/lib"
               ]
 
-   :extra-deps {
-                }
-
-
-   }}}
+   :extra-deps {org.bytedeco/llvm-platform {:mvn/version "17.0.6-1.5.10"}}}
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.0"}
+                 org.clojure/data.json {:mvn/version "2.5.0"}
+                 slipset/deps-deploy {:mvn/version "RELEASE"}}
+          :ns-default build}}}
