@@ -395,6 +395,13 @@
   (let [p (objc [nsstring UTF8String])]
     (dt-ffi/c->string p)))
 
+(defn str->nsstring [s]
+  (objc-msgSend
+   (objc_getClass (dt-ffi/string->c "NSString"))
+   :pointer
+   (sel_registerName (dt-ffi/string->c "stringWithUTF8String:"))
+   (dt-ffi/string->c s)))
+
 (defn oprn [os]
   (prn (nsstring->str os)))
 
