@@ -356,28 +356,36 @@
     (throw (ex-info "Unsupported form."
                     {:form form}))))
 
+(defn ^:private doall* [s] (dorun (tree-seq seqable? seq s)) s)
+
+;; doall* is required since we use *sci-ctx*
+;; and syntax quote can be lazy
+;; must realize the whole tree to make sure
+;; that *sci-ctx* uses the value available when called.
 (defn objc-syntax
   ([form]
-   (objc-syntax nil form))
+   (doall*
+    (objc-syntax nil form)))
   ([env form]
-   (cond
+   (doall*
+    (cond
 
-     (nil? form) (ffi/long->pointer 0)
+      (nil? form) (ffi/long->pointer 0)
 
-     (seq? form)
-     (objc-syntax-seq env form)
+      (seq? form)
+      (objc-syntax-seq env form)
 
-     ;; (map? form)
-     ;; (objc-syntax-map form)
+      ;; (map? form)
+      ;; (objc-syntax-map form)
 
-     (vector? form) (objc-syntax-vector env form)
+      (vector? form) (objc-syntax-vector env form)
 
-     (number? form) form
+      (number? form) form
 
-     (symbol? form) (objc-syntax-symbol env form)
+      (symbol? form) (objc-syntax-symbol env form)
 
-     :else (throw (ex-info "Unsupported form."
-                           {:form form})))))
+      :else (throw (ex-info "Unsupported form."
+                            {:form form}))))))
 
 
 (defmacro objc [form]
