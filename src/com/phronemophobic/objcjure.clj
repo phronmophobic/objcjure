@@ -326,6 +326,19 @@
                               (objc
                                [NSDictionary :dictionaryWithObjects:forKeys:count objects# keys# len#]))
                            `(objc [NSDictionary dictionary]))
+
+          (symbol? subject)
+          `(cond
+             (instance? Long ~subject) (objc [NSNumber :numberWithLong ~subject])
+             (double? ~subject) (objc [NSNumber :numberWithDouble ~subject])
+             (string? ~subject) (objc-msgSend
+                                 (objc_getClass (dt-ffi/string->c "NSString"))
+                                 :pointer
+                                 (sel_registerName (dt-ffi/string->c "stringWithUTF8String:"))
+                                 (dt-ffi/string->c ~subject))
+             :else (throw (ex-info "Can't coerce form"
+                                   {:form (quote ~form)})))
+
           (number? subject)
           (let [sel (cond
                       (instance? Long subject) `(sel_registerName (dt-ffi/string->c "numberWithLong:"))
