@@ -255,20 +255,26 @@
                    (catch Exception e
                      nil)))
 (defn objc-syntax-symbol [env form]
-  (let [resolved (delay
-                   (if *sci-ctx*
-                     (sci-resolve *sci-ctx* form)
-                     (resolve env form)))]
-    (cond
+  (cond
 
-      (contains? env form) form
-      
-      @resolved form
-      :else
-      `(if-let [cls# (objc_getClass (dt-ffi/string->c ~(name form)))]
-         cls#
-         (throw (ex-info "Unable to resolve symbol"
-                         {:sym (quote ~form)}))))))
+    (contains? env form) form
+
+    ;; try to resolve symbol
+    ;; if it can be resolved, leave it
+    (if *sci-ctx*
+      (if sci-resolve
+        (sci-resolve *sci-ctx* form)
+        (throw (ex-info "*sci-ctx* set, but sci-resolve not found."
+                        {})))
+      (resolve env form))
+    form
+
+    ;; otherwise, assume it's a class name
+    :else
+    `(if-let [cls# (objc_getClass (dt-ffi/string->c ~(name form)))]
+       cls#
+       (throw (ex-info "Unable to resolve symbol"
+                       {:sym (quote ~form)})))))
 
 (defn objc-syntax-seq [env form]
   (if-let [verb (first form)]
