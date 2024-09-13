@@ -4,10 +4,15 @@
             [clojure.edn :as edn]
             [clojure.walk :as walk]
             [com.phronemophobic.clj-libffi :as ffi]
+            [com.phronemophobic.clj-libffi.callback :as cb]
             [com.phronemophobic.clong.gen.dtype-next :as gen]
-            [tech.v3.datatype.ffi :as dt-ffi])
+            [tech.v3.datatype.struct :as dt-struct]
+            [tech.v3.datatype.protocols :as dtype-proto]
+            [tech.v3.datatype.ffi :as dt-ffi]
+            )
   (:import
-   java.io.PushbackReader)
+   java.io.PushbackReader
+   [tech.v3.datatype.ffi Pointer])
   (:gen-class))
 
 (set! *warn-on-reflection* true)
@@ -95,6 +100,9 @@
 (def api (tweak-api full-api))
 
 (def dtype-api (gen/api->library-interface api))
+(def dtype-structs (gen/api->structs api))
+(doseq [[id fields] dtype-structs]
+  (dt-struct/define-datatype! id fields))
 
 (dt-ffi/define-library-interface dtype-api)
 
@@ -145,51 +153,41 @@
         f (.getFunction ^NativeLibrary @process-lib "objc_msgSend" call-flags)]
     (.invoke f ret (to-array (into [id] args)))))
 
-#_(def ^:private main-class-loader @clojure.lang.Compiler/LOADER)
-#_(deftype GenericCallback [return-type parameter-types callback]
-  com.sun.jna.CallbackProxy
-  (getParameterTypes [_]
-    (into-array Class parameter-types))
-  (getReturnType [_]
-    return-type)
-  (callback [_ args]
-    (.setContextClassLoader (Thread/currentThread) main-class-loader)
+(defmacro defenum [sym]
+  `(def ~sym
+     (->> (:enums api)
+          (filter #(= ~(name sym) (:spelling %)))
+          first
+          :value)))
+(defenum BLOCK_IS_GLOBAL)
+(defenum BLOCK_HAS_STRET)
 
-    (import 'com.sun.jna.Native)
-    ;; https://java-native-access.github.io/jna/4.2.1/com/sun/jna/Native.html#detach-boolean-
-    ;; for some other info search https://java-native-access.github.io/jna/4.2.1/ for CallbackThreadInitializer
-
-    ;; turning off detach here might give a performance benefit,
-    ;; but more importantly, it prevents jna from spamming stdout
-    ;; with "JNA: could not detach thread"
-    (com.sun.jna.Native/detach false)
-    (let [ret (apply callback args)]
-      
-      ;; need turn detach back on so that
-      ;; we don't prevent the jvm exiting
-      ;; now that we're done
-      (try
-        (com.sun.jna.Native/detach true)
-        (catch IllegalStateException e
-          nil))
-      ret)))
-
-;; ;; - block support
-;; ;;    - https://clang.llvm.org/docs/Block-ABI-Apple.html
-;; ;;    - https://www.galloway.me.uk/2012/10/a-look-inside-blocks-episode-1/
-#_(defn make-block [return-type parameter-types callback]
-  (let [jna-callback (ref! (->GenericCallback return-type parameter-types callback)) 
-
-        block-descriptor (Block_descriptor_1ByReference.)
-        block-descriptor (.writeField block-descriptor "size" (long (.size block-descriptor)))
-
-        block (doto (Block_literal_1ByReference.)
-                (.writeField "isa" (.getGlobalVariableAddress ^NativeLibrary @process-lib "_NSConcreteGlobalBlock"))
-                (.writeField "flags" (int (bit-or
-                                           BLOCK_IS_GLOBAL
-                                           BLOCK_HAS_STRET)))
-                (.writeField "invoke" (CallbackReference/getFunctionPointer jna-callback))
-                (.writeField "descriptor" block-descriptor))]
+;; - block support
+;;    - https://clang.llvm.org/docs/Block-ABI-Apple.html
+;;    - https://www.galloway.me.uk/2012/10/a-look-inside-blocks-episode-1/
+(def block-descriptor-size (-> (dt-struct/get-struct-def :Block_descriptor_1)
+                               :datatype-size))
+(defn make-block [f ret-type arg-types]
+  (let [^Pointer
+        ;; block callbacks always have implicit first argument
+        fptr (ref! (cb/make-callback (fn [_ & args]
+                                       (apply f args))
+                                     ret-type
+                                     (cons :pointer arg-types)))
+        
+        block-descriptor (ref!
+                          (dt-struct/map->struct :Block_descriptor_1
+                                                 {:size block-descriptor-size}))
+        
+        isa (ffi/dlsym ffi/RTLD_DEFAULT (dt-ffi/string->c "_NSConcreteGlobalBlock") )
+        _ (assert isa "isa could not be found.")
+        block (dt-struct/map->struct :Block_literal_1
+                                     {:isa (.address ^Pointer isa)
+                                      :flags (bit-or
+                                              BLOCK_IS_GLOBAL
+                                              BLOCK_HAS_STRET)
+                                      :invoke (.address fptr)
+                                      :descriptor (.address (dt-ffi/->pointer block-descriptor))})]
     block))
 
 
@@ -276,6 +274,34 @@
        (throw (ex-info "Unable to resolve symbol"
                        {:sym (quote ~form)})))))
 
+(def ^:private supported-block-types
+  '{byte :int8
+    short :int16
+    int :int32
+    long :int64
+    float :float32
+    double :float64
+    pointer :pointer
+    pointer? :pointer?
+    void :void})
+(defn ^:private extract-type
+  "Finds the first matching type hint in meta of `o`. Assumes :pointer if no matching hint found."
+  [o]
+  (if-let [tag (:tag (meta o))]
+    (if-let [dtype (get supported-block-types tag)]
+      dtype
+      (throw (ex-info "Unsupported callback type"
+                      {:o o
+                       :tag tag})))
+    ;; default to pointer
+    :pointer))
+(defn objc-syntax-fn [env form]
+  (let [[_fn bindings & body] form]
+    `(make-block
+      ~form
+      ~(extract-type bindings)
+      ~(mapv extract-type bindings))))
+
 (defn objc-syntax-seq [env form]
   (if-let [verb (first form)]
     (case verb
@@ -356,7 +382,9 @@
 
       set! nil
 
-      fn nil
+      ;; assume block
+      fn
+      (objc-syntax-fn env form)
 
       clojure.core/unquote (second form)
 
