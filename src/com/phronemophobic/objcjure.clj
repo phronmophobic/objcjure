@@ -8,6 +8,7 @@
             [com.phronemophobic.clong.gen.dtype-next :as gen]
             [tech.v3.datatype.struct :as dt-struct]
             [tech.v3.datatype.protocols :as dtype-proto]
+            [tech.v3.datatype :as dtype]
             [tech.v3.datatype.ffi :as dt-ffi]
             )
   (:import
@@ -314,9 +315,12 @@
                                                (map #(objc-syntax env %))
                                                (second form))
                                      len# (count v#)
-                                     mem# (Memory. (* 8 len#))]
-                                 (doseq [i# (range len#)]
-                                   (.setPointer mem# (* 8 i#) (nth v# i#)))
+                                     mem# (dtype/make-container
+                                           :native-heap
+                                           :int64
+                                           (into []
+                                                 (map #(.address (dt-ffi/->pointer %)))
+                                                 v#))]
                                  (objc
                                   [NSArray :arrayWithObjects:count mem# len#]))
                               `(objc [NSArray array]))
@@ -327,12 +331,15 @@
                               (dt-ffi/string->c ~subject))
           (set? subject) (if (seq subject)
                            `(let [v# ~(into []
-                                            (map #(objc-syntax env %))
-                                            (second form))
-                                  len# (count v#)
-                                  mem# (Memory. (* 8 len#))]
-                              (doseq [i# (range len#)]
-                                (.setPointer mem# (* 8 i#) (nth v# i#)))
+                                               (map #(objc-syntax env %))
+                                               (second form))
+                                     len# (count v#)
+                                     mem# (dtype/make-container
+                                           :native-heap
+                                           :int64
+                                           (into []
+                                                 (map #(.address (dt-ffi/->pointer %)))
+                                                 v#))]
                               (objc
                                [NSSet :setWithObjects:count mem# len#]))
                            `(objc [NSSet set]))
@@ -342,13 +349,19 @@
                                                    [(objc-syntax env k)
                                                     (objc-syntax env v)]))
                                             (second form))
-
                                   len# (count m#)
-                                  keys# (Memory. (* 8 len#))
-                                  objects# (Memory. (* 8 len#))]
-                              (doseq [[i# [k# v#]] (map-indexed vector m#)]
-                                (.setPointer keys# (* 8 i#) k#)
-                                (.setPointer objects# (* 8 i#) v#))
+                                  keys# (dtype/make-container
+                                         :native-heap
+                                         :int64
+                                         (into []
+                                               (map #(.address (dt-ffi/->pointer %)))
+                                               (keys m#)))
+                                  objects# (dtype/make-container
+                                            :native-heap
+                                            :int64
+                                            (into []
+                                                  (map #(.address (dt-ffi/->pointer %)))
+                                                  (vals m#)))]
                               (objc
                                [NSDictionary :dictionaryWithObjects:forKeys:count objects# keys# len#]))
                            `(objc [NSDictionary dictionary]))
