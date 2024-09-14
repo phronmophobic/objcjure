@@ -378,6 +378,16 @@
              :else (throw (ex-info "Can't coerce form"
                                    {:form (quote ~form)})))
 
+          (boolean? subject)
+          (let [sel `(sel_registerName (dt-ffi/string->c "numberWithBool:"))]
+            `(objc-msgSend
+              (objc_getClass (dt-ffi/string->c "NSNumber"))
+              :pointer
+              ~sel
+              ~(if subject
+                 `(byte 1)
+                 `(byte 0))))
+
           (number? subject)
           (let [sel (cond
                       (instance? Long subject) `(sel_registerName (dt-ffi/string->c "numberWithLong:"))
@@ -435,6 +445,10 @@
       (vector? form) (objc-syntax-vector env form)
 
       (number? form) form
+
+      (boolean? form) ~(byte (if form
+                               1
+                               0))
 
       (symbol? form) (objc-syntax-symbol env form)
 
