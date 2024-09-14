@@ -235,11 +235,15 @@
            2)
     (throw (ex-info "Vectors must have at least two elements."
                     {:form form})))
-  (let [tag (or (prim->dtype (-> form meta :tag))
+  (let [tag (-> form meta :tag)
+        dtype (if tag
+                (if-let [tag-type (get prim->dtype tag)]
+                  tag-type
+                  (keyword tag))
                 :pointer)]
     `(objc-msgSend
       ~(objc-syntax env (first form))
-      ~tag
+      ~dtype
       ~@(if (= 2 (count form))
           [`(sel_registerName (dt-ffi/string->c ~(str (name (second form)))))]
           (eduction
