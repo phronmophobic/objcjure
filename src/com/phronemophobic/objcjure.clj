@@ -373,7 +373,7 @@
 
           (symbol? subject)
           `(cond
-             (instance? Long ~subject) (objc [NSNumber :numberWithLong ~subject])
+             (integer? ~subject) (objc [NSNumber :numberWithLong ~subject])
              (double? ~subject) (objc [NSNumber :numberWithDouble ~subject])
              (string? ~subject) (objc-msgSend
                                  (objc_getClass (dt-ffi/string->c "NSString"))
