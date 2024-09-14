@@ -182,13 +182,14 @@
         
         isa (ffi/dlsym ffi/RTLD_DEFAULT (dt-ffi/string->c "_NSConcreteGlobalBlock") )
         _ (assert isa "isa could not be found.")
-        block (dt-struct/map->struct :Block_literal_1
-                                     {:isa (.address ^Pointer isa)
-                                      :flags (bit-or
-                                              BLOCK_IS_GLOBAL
-                                              BLOCK_HAS_STRET)
-                                      :invoke (.address fptr)
-                                      :descriptor (.address (dt-ffi/->pointer block-descriptor))})]
+        block (ref!
+               (dt-struct/map->struct :Block_literal_1
+                                      {:isa (.address ^Pointer isa)
+                                       :flags (bit-or
+                                               BLOCK_IS_GLOBAL
+                                               BLOCK_HAS_STRET)
+                                       :invoke (.address fptr)
+                                       :descriptor (.address (dt-ffi/->pointer block-descriptor))}))]
     block))
 
 
