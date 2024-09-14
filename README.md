@@ -65,6 +65,7 @@ Some examples:
 Note the differences:
 - the method selector is a keyword
 - the method selector is the full selector (splitting up the selector into its parts to more closely match objective c may be supported in the future).
+- No trailing `:` in method name!
 
 The return type is assumed to be a pointer, but can be coerced via type hint.
 ```clojure
@@ -106,7 +107,7 @@ Anonymous functions are automatically coerced to blocks. The return value and ar
 
 ### Unescape
 
-Arbitrary closure can be inserted anywhere using `~`.
+Arbitrary clojure can be inserted anywhere using `~`.
 
 `(objc [NSNumber :numberWithLong ~(+ 1 2 3 4)])`
 
