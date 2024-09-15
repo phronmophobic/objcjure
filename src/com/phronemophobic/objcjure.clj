@@ -8,6 +8,7 @@
             [com.phronemophobic.clong.gen.dtype-next :as gen]
             [tech.v3.datatype.struct :as dt-struct]
             [tech.v3.datatype.protocols :as dtype-proto]
+            [tech.v3.datatype.native-buffer :as native-buffer]
             [tech.v3.datatype :as dtype]
             [tech.v3.datatype.ffi :as dt-ffi]
             )
@@ -192,6 +193,23 @@
                                        :descriptor (.address (dt-ffi/->pointer block-descriptor))}))]
     block))
 
+
+(defn invoke-block
+  "Untested. Should work... theoretically."
+  [block ret-type & types-and-args]
+  (let [size (:datatype-size (dt-struct/get-struct-def :Block_literal_1))
+        block-struct (dt-struct/inplace-new-struct
+                      :Block_literal_1
+                      (native-buffer/wrap-address (.address (dt-ffi/->pointer block))
+                                                  size
+                                                  nil))]
+    (apply
+     ffi/call-ptr
+     (ffi/long->pointer (:invoke block-struct))
+     ret-type
+     ;; implicit first arg
+     :pointer block
+     types-and-args)))
 
 (comment
   ;; Syntax ideas 7/13
