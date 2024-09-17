@@ -621,3 +621,16 @@
   )
 
 
+(defn arc!
+  "Calls retain on `o`. Registers a cleaner that calls release."
+  [o]
+  (objc [o :retain])
+  (ffi/add-cleaner!
+   o
+   (let [;; Don't keep reference to `o` in cleanup function.
+         address (.address (dt-ffi/->pointer o))
+         description (nsstring->str (objc [o description]))]
+     (fn []
+       (prn "cleaning" description)
+       (objc [~(ffi/long->pointer address) :release]))))
+  o)
