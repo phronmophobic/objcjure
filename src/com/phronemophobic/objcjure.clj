@@ -314,9 +314,11 @@
   (if-let [tag (:tag (meta o))]
     (if-let [dtype (get supported-block-types tag)]
       dtype
-      (throw (ex-info "Unsupported callback type"
-                      {:o o
-                       :tag tag})))
+      (if (dt-struct/struct-datatype? (keyword tag))
+        (keyword tag)
+        (throw (ex-info "Unsupported callback type"
+                        {:o o
+                         :tag tag}))))
     ;; default to pointer
     :pointer))
 (defn objc-syntax-fn [env form]
