@@ -471,7 +471,7 @@
 
       (number? form) form
 
-      (boolean? form) ~(byte (if form
+      (boolean? form) `(byte ~(if form
                                1
                                0))
 
