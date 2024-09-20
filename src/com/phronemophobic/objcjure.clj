@@ -179,7 +179,8 @@
         
         block-descriptor (ref!
                           (dt-struct/map->struct :Block_descriptor_1
-                                                 {:size block-descriptor-size}))
+                                                 {:size block-descriptor-size}
+                                                 :gc))
         
         isa (ffi/dlsym ffi/RTLD_DEFAULT (dt-ffi/string->c "_NSConcreteGlobalBlock") )
         _ (assert isa "isa could not be found.")
@@ -190,7 +191,8 @@
                                                BLOCK_IS_GLOBAL
                                                BLOCK_HAS_STRET)
                                        :invoke (.address fptr)
-                                       :descriptor (.address (dt-ffi/->pointer block-descriptor))}))]
+                                       :descriptor (.address (dt-ffi/->pointer block-descriptor))}
+                                      :gc))]
     block))
 
 
