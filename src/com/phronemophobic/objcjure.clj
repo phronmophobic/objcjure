@@ -326,7 +326,12 @@
 (defn objc-syntax-fn [env form]
   (let [[_fn bindings & body] form]
     `(make-block
-      ~form
+      ;; must remove meta tags since some objc supported tags
+      ;; can't compile
+      (fn ~(into []
+                 (map #(with-meta % {}))
+                 bindings)
+        ~@body)
       ~(extract-type bindings)
       ~(mapv extract-type bindings))))
 
@@ -461,7 +466,7 @@
    (doall*
     (cond
 
-      (nil? form) (ffi/long->pointer 0)
+      (nil? form) `(ffi/long->pointer 0)
 
       (seq? form)
       (objc-syntax-seq env form)
