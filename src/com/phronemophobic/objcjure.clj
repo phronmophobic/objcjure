@@ -118,6 +118,8 @@
     (instance? Double arg) :float64
     (instance? Float arg) :float32
     (char? arg) :int8
+    (instance? tech.v3.datatype.struct.Struct) (dtype-proto/datatype arg)
+
     (dt-ffi/convertible-to-pointer? arg) :pointer
 
     :else (throw (ex-info "Unsupported arg dtype"
