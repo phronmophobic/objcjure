@@ -250,9 +250,6 @@
 (declare objc-syntax)
 
 (defn objc-syntax-vector [env form]
-  ;; check local env
-  ;; check resolve
-  ;; -> spit out code for creating class
   (when (< (count form)
            2)
     (throw (ex-info "Vectors must have at least two elements."
@@ -262,18 +259,22 @@
                 (if-let [tag-type (get prim->dtype tag)]
                   tag-type
                   (keyword tag))
-                :pointer)]
-    `(objc-msgSend
-      ~(objc-syntax env (first form))
-      ~dtype
-      ~@(if (= 2 (count form))
-          [`(sel_registerName (dt-ffi/string->c ~(str (name (second form)))))]
-          (eduction
-           (map (fn [form]
-                  (if (keyword? form)
-                    `(sel_registerName (dt-ffi/string->c ~(str (name form) ":")))
-                    (objc-syntax env form)))
-                (rest form)))))))
+                :pointer)
+        ret## (gensym)]
+    `(let [~ret## (objc-msgSend
+                 ~(objc-syntax env (first form))
+                 ~dtype
+                 ~@(if (= 2 (count form))
+                     [`(sel_registerName (dt-ffi/string->c ~(str (name (second form)))))]
+                     (eduction
+                      (map (fn [form]
+                             (if (keyword? form)
+                               `(sel_registerName (dt-ffi/string->c ~(str (name form) ":")))
+                               (objc-syntax env form)))
+                           (rest form)))))]
+       ~(if (= 'boolean tag)
+          `(not (zero? ~ret##))
+          ret##))))
 
 (def ^:dynamic *sci-ctx* nil)
 (def sci-resolve (try
