@@ -195,7 +195,7 @@
                                        :invoke (.address fptr)
                                        :descriptor (.address (dt-ffi/->pointer block-descriptor))}
                                       :gc))]
-    block))
+    (dt-ffi/->pointer block)))
 
 
 (defn invoke-block
