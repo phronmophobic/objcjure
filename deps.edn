@@ -1,12 +1,13 @@
 {:paths ["src" "resources"]
- :deps {org.clojure/clojure {:mvn/version "1.12.0-alpha3"}
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}
         com.phronemophobic/clong {;; :git/sha "945d9a71c6436938b3bdf11de2e7bf1f1c4c978c"
-                                  :local/root "../clong"
-                                  ;; :mvn/version "1.4.1"
+                                  ;; :local/root "../clong"
+                                  :mvn/version "1.4.3"
                                   }
-        cnuernber/dtype-next {:mvn/version "10.113"}
-        com.phronemophobic/clj-libffi {;;:mvn/version "1.4"
-                                       :local/root "../clj-libffi"}
+        cnuernber/dtype-next {:mvn/version "10.119"}
+        com.phronemophobic/clj-libffi {:mvn/version "1.5"
+                                       ;; :local/root "../clj-libffi"
+                                       }
         }
  :aliases
  {:project
