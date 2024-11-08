@@ -1,6 +1,6 @@
 # objcjure
 
-A clojure DSL for calling objective c code.
+A clojure DSL for calling objective c code. This turns out to be mostly useless since most interesting app permissions aren't enabled for the default "JVM app". 
 
 ## Syntax
 
