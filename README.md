@@ -1,6 +1,21 @@
 # objcjure
 
-A clojure DSL for calling objective c code.
+A clojure DSL for calling objective c code. This turns out to be mostly useless since most interesting app permissions aren't enabled for the default "JVM app". 
+
+## Usage
+
+### Dep
+
+```clojure
+com.phronemophobic/objcjure {:mvn/version "1.0"}
+```
+
+### Require
+
+```clojure
+(require '[com.phronemophobic.objcjure :refer [objc]
+           :as objc])
+```
 
 ## Syntax
 
